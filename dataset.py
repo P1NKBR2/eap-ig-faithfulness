@@ -10,12 +10,14 @@ from torch.utils.data import Dataset, DataLoader
 from eap.utils import model2family
 
 def collate_EAP(xs, task):
-    clean, corrupted, labels = zip(*xs)
+    clean, corrupted, labels = zip(*xs) 
+    # clean, labels = zip(*xs) #hsc: clean_only
     clean = list(clean)
     corrupted = list(corrupted)
     if 'hypernymy' not in task:
         labels = torch.tensor(labels)
     return clean, corrupted, labels
+    # return clean, labels
 
 class EAPDataset(Dataset):
     def __init__(self, task:str, model_name:str, filename:Optional[str]=None):
@@ -40,6 +42,10 @@ class EAPDataset(Dataset):
         label = None
         if self.task == 'ioi':
             label = [row['correct_idx'], row['incorrect_idx']]
+        elif self.task == 'c_task' or self.task == 'g_task' :
+            label = [row['correct_idx'], row['incorrect_idx1'], row['incorrect_idx2']] # corrupt2
+            # label = [row['correct_idx']]
+            # return row['clean'], label # clean_only
         elif 'greater-than' in self.task:
             label = row['correct_idx']
         elif 'hypernymy' in self.task:
@@ -62,3 +68,4 @@ class EAPDataset(Dataset):
     
     def to_dataloader(self, batch_size: int):
         return DataLoader(self, batch_size=batch_size, collate_fn=partial(collate_EAP, task=self.task))
+# %%

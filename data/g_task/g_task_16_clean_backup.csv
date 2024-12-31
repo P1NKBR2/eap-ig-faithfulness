@@ -1,0 +1,17 @@
+clean,correct_idx,incorrect_idx1,incorrect_idx2
+< Kimberly has mouse. Betty has baseball. Elizabeth has blackberries. >. So Betty owns a kind of sport< William has handgun. Kevin has peach. Christopher has shoes. >. So William owns a kind of,28639,15774,22095
+< Sharon has fox. Karen has cannon. Helen has mosquito. >. So Helen owns a kind of insect< Kimberly has handgun. Barbara has motorcycle. Lisa has beetle. >. So Barbara owns a kind of,19716,28639,17564
+< Sarah has spaghetti. Donna has plum. Steven has basketball. >. So Steven owns a kind of,7980,15774,9687
+< John has elephant. Daniel has piano. Brian has watermelon. >. So John owns a kind of animal< Sarah has pizza. Paul has lemon. Susan has cat. >. So Sarah owns a kind of,9687,15774,13019
+< James has kiwi. Lisa has football. Patricia has shoes. >. So Lisa owns a kind of sport< Carol has handgun. Deborah has blueberries. William has hamburger. >. So Carol owns a kind of,28639,13019,15774
+< Betty has meat. Linda has apricot. Robert has handgun. >. So Betty owns a kind of food< Ronald has duck. Donald has tiger. Michael has piano. >. So Michael owns a kind of,11395,13019,13019
+< Maria has shoes. Kenneth has monkey. Linda has grapes. >. So Maria owns a kind of clothes< Michelle has bus. Kimberly has rabbit. Betty has blackberries. >. So Michelle owns a kind of,19716,13019,15774
+< Daniel has taxi. Susan has tea. Ronald has plum. >. So Ronald owns a kind of fruit< Mary has jeep. Robert has grenade. James has trousers. >. So Robert owns a kind of,28639,19716,22095
+< Donna has goat. Karen has football. Nancy has pear. >. So Karen owns a kind of sport< John has mango. Barbara has lime. Michael has rifle. >. So Michael owns a kind of,28639,15774,15774
+< Laura has blackberries. Ronald has goat. Susan has vodka. >. So Susan owns a kind of drink< Elizabeth has cherries. Margaret has elephant. Sarah has meat. >. So Elizabeth owns a kind of,15774,13019,9687
+< Maria has donkey. Nancy has cake. Barbara has durian. >. So Barbara owns a kind of fruit< Linda has squirrel. Helen has pear. Elizabeth has piano. >. So Helen owns a kind of,15774,13019,11395
+< Michael has squirrel. Kimberly has trousers. Donald has basketball. >. So Donald owns a kind of sport< Ruth has cow. Lisa has spaghetti. Charles has coffee. >. So Charles owns a kind of,13748,9687,13019
+< Edward has burger. Donald has cannon. Paul has bee. >. So Paul owns a kind of insect< Christopher has shoes. Karen has beetle. Richard has cannon. >. So Karen owns a kind of,17564,22095,28639
+< Laura has violin. Brian has costume. Lisa has wolf. >. So Laura owns a kind of instrument< Susan has underwear. Mary has jeep. Kenneth has jacket. >. So Mary owns a kind of,19716,22095,22095
+< Margaret has basketball. Michelle has apple. Sandra has costume. >. So Margaret owns a kind of sport< Sharon has tea. Jason has blackberries. Ruth has donkey. >. So Sharon owns a kind of,13748,15774,13019
+< Anthony has banana. Mary has jeep. Betty has mosquito. >. So Mary owns a kind of vehicle< Michelle has guitar. Patricia has grenade. Ruth has pizza. >. So Michelle owns a kind of,11395,28639,9687
