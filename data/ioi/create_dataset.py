@@ -4,13 +4,13 @@ import pandas as pd
 from transformers import AutoTokenizer
 
 from ioi_dataset import IOIDataset
-from eap.utils import model2family
+
 # %%
 model_name = 'gpt2'
 model_name_noslash = model_name.split('/')[-1]
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 tokenizer.pad_token = tokenizer.eos_token
-ds = IOIDataset('mixed', N=1000, tokenizer=tokenizer)
+ds = IOIDataset('mixed', N=100, tokenizer=tokenizer)
 # %%
 abc_dataset = (  # TODO seeded
     ds.gen_flipped_prompts(("S2", "RAND"))
@@ -35,5 +35,5 @@ for i in range(len(ds)):
 
 df = pd.DataFrame.from_dict(d)
 df = df.sample(frac=1)
-df.to_csv(f'{model2family(model_name)}.csv')
+df.to_csv(f'{model_name}_1.csv')
 # %%

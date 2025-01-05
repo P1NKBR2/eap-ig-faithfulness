@@ -6,10 +6,15 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from transformer_lens import HookedTransformer
 from tqdm import tqdm
-from einops import einsum 
+from einops import einsum
+import einops 
+import re
+import bitsandbytes as bnb
 
 from .graph import Graph, InputNode, LogitNode, AttentionNode, MLPNode, Node, Edge
 from .attribute import make_hooks_and_matrices, tokenize_plus
+
+cache = [] #hsc
 
 def evaluate_graph(model: HookedTransformer, graph: Graph, dataloader: DataLoader, metrics: Union[List[Callable[[Tensor], Tensor]],Callable[[Tensor], Tensor]], prune:bool=True, quiet=False):
     """
@@ -46,10 +51,61 @@ def evaluate_graph(model: HookedTransformer, graph: Graph, dataloader: DataLoade
     def make_input_construction_hook(activation_differences, in_graph_vector, attn=False):
         def input_construction_hook(activations, hook):
             if attn:
-                update = einsum(activation_differences[:, :, :len(in_graph_vector)], in_graph_vector,'batch pos previous hidden, previous head -> batch pos head hidden')
+                # update = einsum(activation_differences[:, :, :len(in_graph_vector)], in_graph_vector,'batch pos previous hidden, previous head -> batch pos head hidden')
+                update = einsum(activation_differences[:, :, :len(in_graph_vector)], in_graph_vector,'batch pos previous hidden, previous head -> batch pos hidden') # use_split_qkv = false
+                layer = re.search(r'blocks\.(\d+)\.attn', hook.name)
+                qkv = hook.name[-1]
+                layer = int(layer.group(1))
+                for name, tensor in cache.items():
+                    if name == f'blocks.{layer}.ln1.hook_normalized':
+                        norm = tensor
+                act = norm + update
+                if qkv == 'q':
+                    query_input = act * model.blocks[layer].ln1.w
+                    act = bnb.matmul_4bit(
+                        query_input,
+                        model.blocks[layer].attn.W_Q.t(),
+                        bias=None,
+                        quant_state=model.blocks[layer].attn.W_Q.quant_state,
+                    ).reshape(
+                        query_input.shape[0],
+                        query_input.shape[1],
+                        model.cfg.n_heads,
+                        model.cfg.d_head,
+                    )
+                    + model.blocks[layer].attn.b_Q
+                elif qkv == 'k':
+                    key_input = act * model.blocks[layer].ln1.w
+                    act = bnb.matmul_4bit(
+                        key_input,
+                        model.blocks[layer].attn.W_K.t(),
+                        bias=None,
+                        quant_state=model.blocks[layer].attn.W_K.quant_state,
+                    ).reshape(
+                        key_input.shape[0],
+                        key_input.shape[1],
+                        model.cfg.n_heads,
+                        model.cfg.d_head,
+                    )
+                    + model.blocks[layer].attn.b_K
+                elif qkv == 'v':
+                    value_input = act * model.blocks[layer].ln1.w
+                    act = bnb.matmul_4bit(
+                        value_input,
+                        model.blocks[layer].attn.W_V.t(),
+                        bias=None,
+                        quant_state=model.blocks[layer].attn.W_V.quant_state,
+                    ).reshape(
+                        value_input.shape[0],
+                        value_input.shape[1],
+                        model.cfg.n_heads,
+                        model.cfg.d_head,
+                    )
+                    + model.blocks[layer].attn.b_V
+                activations = act               
             else:
                 update = einsum(activation_differences[:, :, :len(in_graph_vector)], in_graph_vector,'batch pos previous hidden, previous -> batch pos hidden')
-            activations += update
+                activations += update
             return activations
         return input_construction_hook
 
@@ -86,6 +142,11 @@ def evaluate_graph(model: HookedTransformer, graph: Graph, dataloader: DataLoade
         metrics = [metrics]
         metrics_list = False
     results = [[] for _ in metrics]
+
+    names_filter = []    
+    for layer in range(model.cfg.n_layers):
+        names_filter.append(f'blocks.{layer}.ln1.hook_scale')
+        names_filter.append(f'blocks.{layer}.ln1.hook_normalized') #hsc
     
     dataloader = dataloader if quiet else tqdm(dataloader)
     for clean, corrupted, label in dataloader:
@@ -97,14 +158,14 @@ def evaluate_graph(model: HookedTransformer, graph: Graph, dataloader: DataLoade
         input_construction_hooks = make_input_construction_hooks(activation_difference, in_graph_matrix)
         with torch.inference_mode():
             with model.hooks(fwd_hooks_corrupted):
-                corrupted_logits = model(corrupted_tokens, attention_mask=attention_mask)
+                global cache
+                corrupted_logits, cache = model.run_with_cache(corrupted_tokens, attention_mask=attention_mask, names_filter=names_filter)
 
             if empty_circuit:
                 logits = corrupted_logits
             else:
                 with model.hooks(fwd_hooks_clean + input_construction_hooks):
-                    global cache
-                    logits, cache = model.run_with_cache(clean_tokens, attention_mask=attention_mask)
+                    logits = model(clean_tokens, attention_mask=attention_mask) #hsc
 
         for i, metric in enumerate(metrics):
             r = metric(logits, corrupted_logits, input_lengths, label).cpu()
