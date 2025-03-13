@@ -216,9 +216,22 @@ class Graph:
         elif isinstance(node, LogitNode):
             return -1
         elif isinstance(node, MLPNode):
+            # if self.cfg['n_key_value_heads'] != None:
+            #     return (node.layer) * (self.cfg['n_heads'] + 2 * self.cfg['n_key_value_heads'] + 1) + self.cfg['n_heads'] + 2 * self.cfg['n_key_value_heads'] # hsc:GQA
             return (node.layer) * (3 * self.cfg['n_heads'] + 1) + 3 * self.cfg['n_heads']
         elif isinstance(node, AttentionNode):
             assert qkv in 'qkv', f'Must give qkv for AttentionNode, but got {qkv}'
+            # if self.cfg['n_key_value_heads'] != None:
+            #     if qkv == 'q':
+            #         i = node.layer * (self.cfg['n_heads'] + 2 * self.cfg['n_key_value_heads'] + 1)
+            #         return slice(i, i + self.cfg['n_heads']) if attn_slice else i + node.head 
+            #     elif qkv == 'k':
+            #         i = node.layer * (self.cfg['n_heads'] + 2 * self.cfg['n_key_value_heads'] + 1) + self.cfg['n_heads']
+            #     else:
+            #         i = node.layer * (self.cfg['n_heads'] + 2 * self.cfg['n_key_value_heads'] + 1) + self.cfg['n_heads'] + self.cfg['n_key_value_heads'] 
+            #     return slice(i, i + self.cfg['n_key_value_heads']) if attn_slice else i + node.head
+            # else:
+            #     i = node.layer * (3 * self.cfg['n_heads'] + 1) + ('qkv'.index(qkv) * self.cfg['n_heads']) # hsc:GQA
             i = node.layer * (3 * self.cfg['n_heads'] + 1) + ('qkv'.index(qkv) * self.cfg['n_heads'])
             return slice(i, i + self.cfg['n_heads']) if attn_slice else i + node.head
         else:
@@ -302,14 +315,16 @@ class Graph:
 
         edges = heapq.merge(candidate_edges, key = lambda edge: abs_id(edge.score), reverse=reverse)
         while n_edges > 0:
-            n_edges -= 1
             top_edge = next(edges)
+            # if isinstance(top_edge.parent, MLPNode) and isinstance(top_edge.child, MLPNode):
+            #     continue
             top_edge.in_graph = True
             parent = top_edge.parent
             if not parent.in_graph:
                 parent.in_graph = True
                 parent_parent_edges = sorted([parent_edge for parent_edge in parent.parent_edges], key = lambda edge: abs_id(edge.score), reverse=reverse)
                 edges = heapq.merge(edges, parent_parent_edges, key = lambda edge: abs_id(edge.score), reverse=reverse)
+            n_edges -= 1
 
     def prune_dead_nodes(self, prune_childless=True, prune_parentless=True):
         self.nodes['logits'].in_graph = any(parent_edge.in_graph for parent_edge in self.nodes['logits'].parent_edges)
@@ -344,10 +359,10 @@ class Graph:
         graph = Graph()
         if isinstance(model_or_config, HookedTransformer):
             cfg = model_or_config.cfg
-            graph.cfg = {'n_layers': cfg.n_layers, 'n_heads': cfg.n_heads, 'parallel_attn_mlp':cfg.parallel_attn_mlp}
+            graph.cfg = {'n_layers': cfg.n_layers, 'n_heads': cfg.n_heads, 'n_key_value_heads': cfg.n_key_value_heads, 'parallel_attn_mlp':cfg.parallel_attn_mlp}
         elif isinstance(model_or_config, HookedTransformerConfig):
             cfg = model_or_config
-            graph.cfg = {'n_layers': cfg.n_layers, 'n_heads': cfg.n_heads, 'parallel_attn_mlp':cfg.parallel_attn_mlp}
+            graph.cfg = {'n_layers': cfg.n_layers, 'n_heads': cfg.n_heads, 'n_key_value_heads': cfg.n_key_value_heads, 'parallel_attn_mlp':cfg.parallel_attn_mlp}
         else:
             graph.cfg = model_or_config
         
@@ -356,7 +371,7 @@ class Graph:
         residual_stream = [input_node]
 
         for layer in range(graph.cfg['n_layers']):
-            attn_nodes = [AttentionNode(layer, head, cfg.use_split_qkv_input) for head in range(graph.cfg['n_heads'])]
+            attn_nodes = [AttentionNode(layer, head, False) for head in range(graph.cfg['n_heads'])]
             mlp_node = MLPNode(layer)
             
             for attn_node in attn_nodes: 
@@ -391,6 +406,10 @@ class Graph:
         graph.nodes[logit_node.name] = logit_node
 
         graph.n_forward = 1 + graph.cfg['n_layers'] * (graph.cfg['n_heads'] + 1)
+        # if graph.cfg['n_key_value_heads'] != None:
+        #     graph.n_backward = graph.cfg['n_layers'] * (graph.cfg['n_heads'] + 2 * graph.cfg['n_key_value_heads'] + 1) + 1
+        # else:
+        #     graph.n_backward = graph.cfg['n_layers'] * (3 * graph.cfg['n_heads'] + 1) + 1 # hsc:GQA
         graph.n_backward = graph.cfg['n_layers'] * (3 * graph.cfg['n_heads'] + 1) + 1
 
         return graph

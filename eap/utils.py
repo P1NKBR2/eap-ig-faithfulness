@@ -6,12 +6,15 @@ import torch
 import torch.nn.functional as F
 
 def model2family(model_name: str):
+    model_name = model_name.lower()
     if 'gpt2' in model_name:
         return 'gpt2'
     elif 'pythia' in model_name:
         return 'pythia'
     elif 'vicuna' in model_name:
         return 'vicuna'
+    elif 'qwen' in model_name:
+        return 'qwen'
     else:
         raise ValueError(f"Couldn't find model family for model: {model_name}")
 

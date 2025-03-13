@@ -46,7 +46,7 @@ lgd = fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, -0.02
 xlabel = fig.text(0.5, -0.015, f'Edges included (/{n_edges(model)})', ha='center', fontsize=12)
 ylabel = fig.text(-0.00, 0.5, 'Normalized faithfulness', va='center', rotation='vertical', fontsize=12)
 fig.tight_layout()
-fig.savefig(f'{model}/png/eap-ig-comparison.png', bbox_extra_artists=[lgd, xlabel, ylabel], bbox_inches='tight')
-fig.savefig(f'{model}/pdf/eap-ig-comparison.pdf', bbox_extra_artists=[lgd, xlabel, ylabel], bbox_inches='tight')
+# fig.savefig(f'{model}/png/eap-ig-comparison.png', bbox_extra_artists=[lgd, xlabel, ylabel], bbox_inches='tight')
+# fig.savefig(f'{model}/pdf/eap-ig-comparison.pdf', bbox_extra_artists=[lgd, xlabel, ylabel], bbox_inches='tight')
 fig.show()
 # %%

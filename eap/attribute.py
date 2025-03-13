@@ -41,6 +41,8 @@ def make_hooks_and_matrices(model: HookedTransformer, graph: Graph, batch_size:i
     fwd_hooks_corrupted = []
     bwd_hooks = []
     n_heads = model.cfg.n_heads
+    n_key_value_heads = model.cfg.n_key_value_heads if model.cfg.n_key_value_heads != None else n_heads
+    repeat_kv_heads = n_heads // n_key_value_heads
     
     def activation_hook(index, activations, hook, add : bool = True):
         """Hook to add/subtract activations to/from the activation difference matrix
@@ -78,10 +80,16 @@ def make_hooks_and_matrices(model: HookedTransformer, graph: Graph, batch_size:i
                     head = bwd_index.start % (3 * n_heads + 1)
                     if head < n_heads:
                         W = model.blocks[layer].attn.W_Q
-                    elif head in range(n_heads, 2*n_heads):
-                        W = model.blocks[layer].attn.W_K
-                    elif head in range(2*n_heads, 3*n_heads):
-                        W = model.blocks[layer].attn.W_V
+                    elif head in range(n_heads, 2 * n_heads):
+                        if 'Qwen' in model.cfg.model_name:
+                            W = model.blocks[layer].attn._W_K
+                        else: 
+                            W = model.blocks[layer].attn.W_K
+                    elif head in range(2 * n_heads, 3 * n_heads):
+                        if 'Qwen' in model.cfg.model_name:
+                            W = model.blocks[layer].attn._W_V
+                        else:
+                            W = model.blocks[layer].attn.W_V
 
                     for layer_name, data in model.state_dict().items():
                         if layer_name == f'blocks.{layer}.ln1.w':
@@ -103,7 +111,11 @@ def make_hooks_and_matrices(model: HookedTransformer, graph: Graph, batch_size:i
 
                     if model.cfg.load_in_4bit == True:
                         W = bnbF.dequantize_4bit(W.t(), W.quant_state).to(grads.dtype)
-                        W = einops.rearrange(W, "d_model (head_index d_head) -> head_index d_model d_head",  head_index = n_heads)
+                        if head < n_heads:                                        
+                            W = einops.rearrange(W, "d_model (head_index d_head) -> head_index d_model d_head",  head_index = n_heads)
+                        else:
+                            W = einops.rearrange(W, "d_model (head_index d_head) -> head_index d_model d_head",  head_index = n_key_value_heads)
+                            W = einops.repeat(W, "head_index d_model d_head -> (repeat head_index) d_model d_head", repeat = repeat_kv_heads)
                     ln_grad = einops.einsum(grads, W, w, "batch pos head_index d_head, head_index d_model d_head, d_model -> batch pos head_index d_model")
                     dnorm = ln_grad
                     grads = dnorm / scale - (norm * (dnorm * norm).mean(-1, keepdim=True)) / scale
