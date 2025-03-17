@@ -316,8 +316,8 @@ class Graph:
         edges = heapq.merge(candidate_edges, key = lambda edge: abs_id(edge.score), reverse=reverse)
         while n_edges > 0:
             top_edge = next(edges)
-            # if isinstance(top_edge.parent, MLPNode) and isinstance(top_edge.child, MLPNode):
-            #     continue
+            if isinstance(top_edge.parent, MLPNode) or isinstance(top_edge.child, MLPNode):
+                continue
             top_edge.in_graph = True
             parent = top_edge.parent
             if not parent.in_graph:
@@ -535,6 +535,7 @@ class Graph:
                         style="filled, rounded",
                         shape="box", 
                         fontname="Helvetica",
+                        
                         )
 
         scores = self.get_scores().abs()

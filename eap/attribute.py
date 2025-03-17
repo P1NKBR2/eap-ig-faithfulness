@@ -166,7 +166,7 @@ def tokenize_plus(model: HookedTransformer, inputs: List[str]):
             - input_lengths (torch.Tensor): The lengths of the tokenized inputs.
             - n_pos (int): The maximum sequence length of the tokenized inputs.
     """
-    tokens = model.to_tokens(inputs, prepend_bos=True, padding_side='right')
+    tokens = model.to_tokens(inputs, prepend_bos=False, padding_side='right')
     attention_mask = get_attention_mask(model.tokenizer, tokens, True)
     input_lengths = attention_mask.sum(1)
     n_pos = attention_mask.size(1)
