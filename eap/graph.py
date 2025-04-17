@@ -28,7 +28,7 @@ class Node:
     in_graph: bool
     qkv_inputs: Optional[List[str]]
 
-    def __init__(self, name: str, layer:int, in_hook: List[str], out_hook: str, index: Tuple, qkv_inputs: Optional[List[str]]=None):
+    def __init__(self, name: str, layer:int, in_hook: List[str], out_hook: str, index: Tuple, qkv_inputs: Optional[List[str]]=None, head_info: Optional[List[str]]=None, attn: Optional[List[dict]]=None):
         self.name = name
         self.layer = layer
         self.in_hook = in_hook
@@ -40,6 +40,8 @@ class Node:
         self.parent_edges = set()
         self.child_edges = set()
         self.qkv_inputs = qkv_inputs
+        self.head_info = head_info
+        self.attn = attn
 
     def __eq__(self, other):
         return self.name == other.name
@@ -64,14 +66,17 @@ class MLPNode(Node):
 
 class AttentionNode(Node):
     head: int
-    def __init__(self, layer:int, head:int, use_split_qkv:bool):
+    def __init__(self, layer:int, head:int, use_split_qkv:bool, head_info: List[str], attn: List[dict]):
         name = f'a{layer}.h{head}' 
         self.head = head
         index = (slice(None), slice(None), head)
+        head_info = head_info
+        attn = attn
+
         if use_split_qkv:
             super().__init__(name, layer, f'blocks.{layer}.hook_attn_in', f"blocks.{layer}.attn.hook_result", index, [f'blocks.{layer}.hook_{letter}_input' for letter in 'qkv'])
         else:
-            super().__init__(name, layer, f'blocks.{layer}.hook_attn_in', f"blocks.{layer}.attn.hook_result", index, [f'blocks.{layer}.attn.hook_{letter}' for letter in 'qkv']) # hsc: split_qkv=False
+            super().__init__(name, layer, f'blocks.{layer}.hook_attn_in', f"blocks.{layer}.attn.hook_result", index, [f'blocks.{layer}.attn.hook_{letter}' for letter in 'qkv'], head_info, attn) # hsc: split_qkv=False
 
 class InputNode(Node):
     def __init__(self):
@@ -302,9 +307,9 @@ class Graph:
             absolute (bool): whether to take the absolute value of the scores before applying the threshold"""
         if reset:
             for node in self.nodes.values():
-                node.in_graph = False 
+                node.in_graph = getattr(node, 'keep', False)  # hsc
             for edge in self.edges.values():
-                edge.in_graph = False
+                edge.in_graph = getattr(edge, 'keep', False)  # hsc
             self.nodes['logits'].in_graph = True
 
         def abs_id(s: float):
@@ -316,8 +321,10 @@ class Graph:
         edges = heapq.merge(candidate_edges, key = lambda edge: abs_id(edge.score), reverse=reverse)
         while n_edges > 0:
             top_edge = next(edges)
-            if isinstance(top_edge.parent, MLPNode) or isinstance(top_edge.child, MLPNode):
+            if isinstance(top_edge.parent, MLPNode) and isinstance(top_edge.child, MLPNode):
                 continue
+            # if '<q>' in top_edge.name or '<k>' in top_edge.name:
+            #     continue
             top_edge.in_graph = True
             parent = top_edge.parent
             if not parent.in_graph:
@@ -369,9 +376,10 @@ class Graph:
         input_node = InputNode()
         graph.nodes[input_node.name] = input_node
         residual_stream = [input_node]
+        use_split_qkv = cfg.use_split_qkv_input
 
         for layer in range(graph.cfg['n_layers']):
-            attn_nodes = [AttentionNode(layer, head, False) for head in range(graph.cfg['n_heads'])]
+            attn_nodes = [AttentionNode(layer, head, use_split_qkv, "", [{"name":"end_io", "value": 0}, {"name":"end_s2", "value": 0}, {"name":"s2_s1", "value": 0}, {"name":"s2_s1_1", "value": 0}, {"name":"s1_1_s1", "value": 0}]) for head in range(graph.cfg['n_heads'])]
             mlp_node = MLPNode(layer)
             
             for attn_node in attn_nodes: 
@@ -529,13 +537,22 @@ class Graph:
 
         for node in self.nodes.values():
             if node.in_graph:
-                g.add_node(node.name, 
+                if '.h' in node.name:
+                    g.add_node(node.name, 
                         fillcolor=colors[node.name], 
                         color="black", 
                         style="filled, rounded",
                         shape="box", 
                         fontname="Helvetica",
-                        
+                        # label=node.name + '\n' + node.head_info
+                        )
+                else:
+                    g.add_node(node.name, 
+                        fillcolor=colors[node.name], 
+                        color="black", 
+                        style="filled, rounded",
+                        shape="box", 
+                        fontname="Helvetica",
                         )
 
         scores = self.get_scores().abs()

@@ -40,6 +40,7 @@ def evaluate_graph(model: HookedTransformer, graph: Graph, dataloader: DataLoade
     # we construct the in_graph matrix, which is a binary matrix indicating which edges are in the circuit
     # we invert it so that we add in the corrupting activation differences for edges not in the circuit
     in_graph_matrix = torch.zeros((graph.n_forward, graph.n_backward), device='cuda', dtype=model.cfg.dtype)
+    print(in_graph_matrix.size())
     for edge in graph.edges.values():
         if edge.in_graph:
             in_graph_matrix[graph.forward_index(edge.parent, attn_slice=False), graph.backward_index(edge.child, qkv=edge.qkv, attn_slice=False)] = 1
@@ -52,105 +53,107 @@ def evaluate_graph(model: HookedTransformer, graph: Graph, dataloader: DataLoade
         def input_construction_hook(activations, hook):
             if attn:
                 update = einsum(activation_differences[:, :, :len(in_graph_vector)], in_graph_vector,'batch pos previous hidden, previous head -> batch pos head hidden')
-                if model.cfg.use_split_qkv_input == False:
-                    update = einsum(activation_differences[:, :, :len(in_graph_vector)], in_graph_vector,'batch pos previous hidden, previous head -> batch pos hidden') # use_split_qkv = false
-                    layer = re.search(r'blocks\.(\d+)\.attn', hook.name)
-                    qkv = hook.name[-1]
-                    layer = int(layer.group(1))
-                    for name, tensor in cache.items():
-                        if name == f'blocks.{layer}.ln1.hook_normalized':
-                            norm = tensor
-                    act = norm + update
-                    if qkv == 'q':
-                        query_input = act * model.blocks[layer].ln1.w
-                        query_input_o = norm * model.blocks[layer].ln1.w
-                        act = bnb.matmul_4bit(
-                            query_input,
-                            model.blocks[layer].attn.W_Q.t(),
-                            bias=None,
-                            quant_state=model.blocks[layer].attn.W_Q.quant_state,
-                        ).reshape(
-                            query_input.shape[0],
-                            query_input.shape[1],
-                            model.cfg.n_heads,
-                            model.cfg.d_head,
-                        )
-                        + model.blocks[layer].attn.b_Q
-                        q = bnb.matmul_4bit(
-                            query_input_o,
-                            model.blocks[layer].attn.W_Q.t(),
-                            bias=None,
-                            quant_state=model.blocks[layer].attn.W_Q.quant_state,
-                        ).reshape(
-                            query_input_o.shape[0],
-                            query_input_o.shape[1],
-                            model.cfg.n_heads,
-                            model.cfg.d_head,
-                        )
-                        + model.blocks[layer].attn.b_Q
-                        act -= q
-                    elif qkv == 'k':
-                        key_input = act * model.blocks[layer].ln1.w
-                        key_input_o = norm * model.blocks[layer].ln1.w
-                        act = bnb.matmul_4bit(
-                            key_input,
-                            model.blocks[layer].attn.W_K.t(),
-                            bias=None,
-                            quant_state=model.blocks[layer].attn.W_K.quant_state,
-                        ).reshape(
-                            key_input.shape[0],
-                            key_input.shape[1],
-                            model.cfg.n_heads,
-                            model.cfg.d_head,
-                        )
-                        + model.blocks[layer].attn.b_K
-                        k = bnb.matmul_4bit(
-                            key_input_o,
-                            model.blocks[layer].attn.W_K.t(),
-                            bias=None,
-                            quant_state=model.blocks[layer].attn.W_K.quant_state,
-                        ).reshape(
-                            key_input_o.shape[0],
-                            key_input_o.shape[1],
-                            model.cfg.n_heads,
-                            model.cfg.d_head,
-                        )
-                        + model.blocks[layer].attn.b_K
-                        act -= k
-                    elif qkv == 'v':
-                        value_input = act * model.blocks[layer].ln1.w
-                        value_input_o = norm * model.blocks[layer].ln1.w
-                        act = bnb.matmul_4bit(
-                            value_input,
-                            model.blocks[layer].attn.W_V.t(),
-                            bias=None,
-                            quant_state=model.blocks[layer].attn.W_V.quant_state,
-                        ).reshape(
-                            value_input.shape[0],
-                            value_input.shape[1],
-                            model.cfg.n_heads,
-                            model.cfg.d_head,
-                        )
-                        + model.blocks[layer].attn.b_V
-                        v = bnb.matmul_4bit(
-                            value_input_o,
-                            model.blocks[layer].attn.W_V.t(),
-                            bias=None,
-                            quant_state=model.blocks[layer].attn.W_V.quant_state,
-                        ).reshape(
-                            value_input_o.shape[0],
-                            value_input_o.shape[1],
-                            model.cfg.n_heads,
-                            model.cfg.d_head,
-                        )
-                        + model.blocks[layer].attn.b_V
-                        act -= v
-                    activations = act 
-                else:
-                    activations += update                    
+                print(in_graph_vector.size())
+                # if model.cfg.use_split_qkv_input == False:
+                #     update = einsum(activation_differences[:, :, :len(in_graph_vector)], in_graph_vector,'batch pos previous hidden, previous head -> batch pos hidden') # use_split_qkv = false
+                #     layer = re.search(r'blocks\.(\d+)\.attn', hook.name)
+                #     qkv = hook.name[-1]
+                #     layer = int(layer.group(1))
+                #     for name, tensor in cache.items():
+                #         if name == f'blocks.{layer}.ln1.hook_normalized':
+                #             norm = tensor
+                #     act = norm + update
+                #     if qkv == 'q':
+                #         query_input = act * model.blocks[layer].ln1.w
+                #         query_input_o = norm * model.blocks[layer].ln1.w
+                #         act = bnb.matmul_4bit(
+                #             query_input,
+                #             model.blocks[layer].attn.W_Q.t(),
+                #             bias=None,
+                #             quant_state=model.blocks[layer].attn.W_Q.quant_state,
+                #         ).reshape(
+                #             query_input.shape[0],
+                #             query_input.shape[1],
+                #             model.cfg.n_heads,
+                #             model.cfg.d_head,
+                #         )
+                #         + model.blocks[layer].attn.b_Q
+                #         q = bnb.matmul_4bit(
+                #             query_input_o,
+                #             model.blocks[layer].attn.W_Q.t(),
+                #             bias=None,
+                #             quant_state=model.blocks[layer].attn.W_Q.quant_state,
+                #         ).reshape(
+                #             query_input_o.shape[0],
+                #             query_input_o.shape[1],
+                #             model.cfg.n_heads,
+                #             model.cfg.d_head,
+                #         )
+                #         + model.blocks[layer].attn.b_Q
+                #         act -= q
+                #     elif qkv == 'k':
+                #         key_input = act * model.blocks[layer].ln1.w
+                #         key_input_o = norm * model.blocks[layer].ln1.w
+                #         act = bnb.matmul_4bit(
+                #             key_input,
+                #             model.blocks[layer].attn.W_K.t(),
+                #             bias=None,
+                #             quant_state=model.blocks[layer].attn.W_K.quant_state,
+                #         ).reshape(
+                #             key_input.shape[0],
+                #             key_input.shape[1],
+                #             model.cfg.n_heads,
+                #             model.cfg.d_head,
+                #         )
+                #         + model.blocks[layer].attn.b_K
+                #         k = bnb.matmul_4bit(
+                #             key_input_o,
+                #             model.blocks[layer].attn.W_K.t(),
+                #             bias=None,
+                #             quant_state=model.blocks[layer].attn.W_K.quant_state,
+                #         ).reshape(
+                #             key_input_o.shape[0],
+                #             key_input_o.shape[1],
+                #             model.cfg.n_heads,
+                #             model.cfg.d_head,
+                #         )
+                #         + model.blocks[layer].attn.b_K
+                #         act -= k
+                #     elif qkv == 'v':
+                #         value_input = act * model.blocks[layer].ln1.w
+                #         value_input_o = norm * model.blocks[layer].ln1.w
+                #         act = bnb.matmul_4bit(
+                #             value_input,
+                #             model.blocks[layer].attn.W_V.t(),
+                #             bias=None,
+                #             quant_state=model.blocks[layer].attn.W_V.quant_state,
+                #         ).reshape(
+                #             value_input.shape[0],
+                #             value_input.shape[1],
+                #             model.cfg.n_heads,
+                #             model.cfg.d_head,
+                #         )
+                #         + model.blocks[layer].attn.b_V
+                #         v = bnb.matmul_4bit(
+                #             value_input_o,
+                #             model.blocks[layer].attn.W_V.t(),
+                #             bias=None,
+                #             quant_state=model.blocks[layer].attn.W_V.quant_state,
+                #         ).reshape(
+                #             value_input_o.shape[0],
+                #             value_input_o.shape[1],
+                #             model.cfg.n_heads,
+                #             model.cfg.d_head,
+                #         )
+                #         + model.blocks[layer].attn.b_V
+                #         act -= v
+                #     activations = act 
+                # else:
+                #     activations += update                    
             else:
                 update = einsum(activation_differences[:, :, :len(in_graph_vector)], in_graph_vector,'batch pos previous hidden, previous -> batch pos hidden')
-                activations += update
+            print(hook, activations.size())
+            activations += update
             return activations
         return input_construction_hook
 
@@ -166,6 +169,8 @@ def evaluate_graph(model: HookedTransformer, graph: Graph, dataloader: DataLoade
                     node = graph.nodes[f'a{layer}.h0']
                     prev_index = graph.prev_index(node)
                     bwd_index = graph.backward_index(node, qkv=letter, attn_slice=True)
+                    if letter in 'kv':
+                        bwd_index = 4
                     input_construction_hooks.append((node.qkv_inputs[i], make_input_construction_hook(activation_differences, in_graph_matrix[:prev_index, bwd_index], attn=True)))
             # add MLP hook
             if graph.nodes[f'm{layer}'].in_graph:

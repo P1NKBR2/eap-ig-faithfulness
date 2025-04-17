@@ -46,6 +46,8 @@ class EAPDataset(Dataset):
             label = [row['correct_idx'], row['incorrect_idx1'], row['incorrect_idx2']] # corrupt2
             # label = [row['correct_idx']]
             # return row['clean'], label # clean_only
+        elif self.task == 'ioi_code':
+            label = [row['correct_idx'], row['incorrect_idx0'], row['incorrect_idx1'], row['incorrect_idx2']]
         elif 'greater-than' in self.task:
             label = row['correct_idx']
         elif 'hypernymy' in self.task:

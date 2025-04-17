@@ -6,7 +6,7 @@ from transformers import AutoTokenizer
 from ioi_dataset import IOIDataset
 
 # %%
-model_name = 'gpt2'
+model_name = 'qwen'
 model_name_noslash = model_name.split('/')[-1]
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 tokenizer.pad_token = tokenizer.eos_token

@@ -109,19 +109,26 @@ def make_hooks_and_matrices(model: HookedTransformer, graph: Graph, batch_size:i
                             head_index=n_heads
                         )
 
-                    if model.cfg.load_in_4bit == True:
-                        W = bnbF.dequantize_4bit(W.t(), W.quant_state).to(grads.dtype)
-                        if head < n_heads:                                        
-                            W = einops.rearrange(W, "d_model (head_index d_head) -> head_index d_model d_head",  head_index = n_heads)
-                        else:
-                            W = einops.rearrange(W, "d_model (head_index d_head) -> head_index d_model d_head",  head_index = n_key_value_heads)
-                            W = einops.repeat(W, "head_index d_model d_head -> (repeat head_index) d_model d_head", repeat = repeat_kv_heads)
+                    if n_key_value_heads != n_heads:
+                        if model.cfg.load_in_4bit == True:
+                            W = bnbF.dequantize_4bit(W.t(), W.quant_state).to(grads.dtype)
+                            if head < n_heads:                                        
+                                W = einops.rearrange(W, "d_model (head_index d_head) -> head_index d_model d_head",  head_index = n_heads)
+                            else:
+                                W = einops.rearrange(W, "d_model (head_index d_head) -> head_index d_model d_head",  head_index = n_key_value_heads)
+                                W = einops.repeat(W, "head_index d_model d_head -> (repeat head_index) d_model d_head", repeat = repeat_kv_heads)
+                        # else:
+                        #     if head >= n_heads:
+                        #         W = einops.repeat(W, "head_index d_model d_head -> (repeat head_index) d_model d_head", repeat = repeat_kv_heads)
+                        #         print('W:', W.size(), head)
                     ln_grad = einops.einsum(grads, W, w, "batch pos head_index d_head, head_index d_model d_head, d_model -> batch pos head_index d_model")
                     dnorm = ln_grad
                     grads = dnorm / scale - (norm * (dnorm * norm).mean(-1, keepdim=True)) / scale
 
             s = einsum(activation_difference[:, :, :prev_index], grads,'batch pos forward hidden, batch pos backward hidden -> forward backward')
             s = s.squeeze(1)#.to(scores.device)
+            if len(s.shape) > 1 and s.shape[1] == 4:
+                s = einops.repeat(s, "forward backward -> forward (repeat backward)", repeat = repeat_kv_heads)
             scores[:prev_index, bwd_index] += s
         except RuntimeError as e:
             print("Gradient Hook Error", hook.name, activation_difference.size(), grads.size(), prev_index, bwd_index)
@@ -137,7 +144,7 @@ def make_hooks_and_matrices(model: HookedTransformer, graph: Graph, batch_size:i
         # exclude logits from forward
         if not isinstance(node, LogitNode):
             fwd_index = graph.forward_index(node)
-            # fwd_hooks_corrupted.append((node.out_hook, partial(activation_hook, fwd_index))) #hsc: clean_only
+            fwd_hooks_corrupted.append((node.out_hook, partial(activation_hook, fwd_index))) #hsc: clean_only
             fwd_hooks_clean.append((node.out_hook, partial(activation_hook, fwd_index, add=False)))
         if not isinstance(node, InputNode):
             prev_index = graph.prev_index(node)

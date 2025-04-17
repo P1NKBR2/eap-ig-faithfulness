@@ -64,8 +64,8 @@ def logit_diff(clean_logits: torch.Tensor, corrupted_logits: torch.Tensor, input
     clean_logits = get_logit_positions(clean_logits, input_length)
     cleans = torch.softmax(clean_logits, dim=-1) if prob else clean_logits
     good_bad = torch.gather(cleans, -1, labels.to(cleans.device))
-    results = good_bad[:, 0] - good_bad[:, 1]
-
+    results = good_bad[:, 0] - (good_bad[:, 2] + good_bad[:, 3])/2
+    
     if loss:
         # remember it's reversed to make it a loss
         results = -results
